@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform, // Importante para detectar Web
 } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
@@ -33,7 +34,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 1. Verificar si ya existe una sesión activa al cargar la pantalla
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -65,9 +65,10 @@ export default function Login() {
         await AsyncStorage.setItem("token", res.data.token);
         router.replace("/(tabs)/home");
       }
-    } catch (err: any) {
+    } catch (err) {
       console.log("Error en el login:", err);
-      const msg = err.response?.data?.message || "Credenciales incorrectas";
+      const msg =
+        (err as any).response?.data?.message || "Credenciales incorrectas";
       Alert.alert("Error de acceso", msg);
     } finally {
       setLoading(false);
@@ -75,79 +76,97 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
+    // 1. ESTE CONTENEDOR ELIMINA LAS FRANJAS BLANCAS
+    <View style={styles.outerContainer}>
       <StatusBar style="light" />
 
       {/* Círculos decorativos de fondo */}
       <View style={styles.circleDecoration} />
 
-      <View style={styles.header}>
-        <View style={styles.logoIcon}>
-          <Ionicons name="flash" size={40} color={colors.accent} />
-        </View>
-        <Text style={styles.title}>¡Hola de nuevo!</Text>
-        <Text style={styles.subtitle}>Inicia sesión en iliAI</Text>
-      </View>
-
-      <View style={styles.formCard}>
-        <View style={styles.inputWrapper}>
-          <Text style={styles.label}>EMAIL</Text>
-          <TextInput
-            placeholder="ejemplo@correo.com"
-            placeholderTextColor="#475569"
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+      {/* 2. ESTE CONTENEDOR HACE QUE SEA RESPONSIVO (Bootstrap Style) */}
+      <View style={styles.responsiveWrapper}>
+        <View style={styles.header}>
+          <View style={styles.logoIcon}>
+            <Ionicons name="flash" size={40} color={colors.accent} />
+          </View>
+          <Text style={styles.title}>¡Hola de nuevo!</Text>
+          <Text style={styles.subtitle}>Inicia sesión en iliAI</Text>
         </View>
 
-        <View style={styles.inputWrapper}>
-          <Text style={styles.label}>CONTRASEÑA</Text>
-          <TextInput
-            placeholder="••••••••"
-            placeholderTextColor="#475569"
-            secureTextEntry
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
+        <View style={styles.formCard}>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>EMAIL</Text>
+            <TextInput
+              placeholder="ejemplo@correo.com"
+              placeholderTextColor="#475569"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>CONTRASEÑA</Text>
+            <TextInput
+              placeholder="••••••••"
+              placeholderTextColor="#475569"
+              secureTextEntry
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, loading && { opacity: 0.7 }]}
+            onPress={handleLogin}
+            activeOpacity={0.8}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Entrar</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.7 }]}
-          onPress={handleLogin}
-          activeOpacity={0.8}
-          disabled={loading}
+          style={styles.registerLink}
+          onPress={() => router.push("/(auth)/register")}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Text style={styles.buttonText}>Entrar</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </>
-          )}
+          <Text style={styles.linkTextGrey}>¿No tienes cuenta? </Text>
+          <Text style={styles.linkTextBlue}>Crear cuenta</Text>
         </TouchableOpacity>
       </View>
-
-      <TouchableOpacity
-        style={styles.registerLink}
-        onPress={() => router.push("/(auth)/register")}
-      >
-        <Text style={styles.linkTextGrey}>¿No tienes cuenta? </Text>
-        <Text style={styles.linkTextBlue}>Crear cuenta</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  // EL PADRE: Ocupa toda la pantalla y tiene el color de fondo
+  outerContainer: {
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    // Fix específico para navegadores web
+    ...Platform.select({
+      web: {
+        minHeight: "100%",
+      },
+    }),
+  },
+  // EL HIJO: No permite que el login se "desparrame" en monitores grandes
+  responsiveWrapper: {
+    width: "100%",
+    maxWidth: 420,
     padding: 24,
   },
   circleDecoration: {
@@ -189,11 +208,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     padding: 24,
     borderRadius: 28,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.4)",
+      },
+    }),
   },
   inputWrapper: {
     marginBottom: 20,
@@ -225,10 +253,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     marginTop: 10,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
   buttonText: {
     color: "#fff",
