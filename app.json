@@ -2,7 +2,7 @@
   "expo": {
     "name": "iliAI-app",
     "slug": "iliAI-app",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "iliaiapp",
@@ -22,7 +22,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ilie.alexandru.iliAIapp"
     },
     "web": {
       "bundler": "metro",
@@ -40,6 +41,12 @@
       "eas": {
         "projectId": "621956a9-40a6-471c-9d5d-7399677099a8"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/621956a9-40a6-471c-9d5d-7399677099a8"
     }
   }
 }

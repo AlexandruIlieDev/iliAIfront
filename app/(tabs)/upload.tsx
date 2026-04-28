@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  Modal,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
@@ -37,21 +38,47 @@ api.interceptors.request.use(
   },
 );
 
+// ✅ CATEGORÍAS SINCRONIZADAS CON EL BACKEND (ESP)
 const CATEGORIES = [
   "superior",
   "inferior",
   "calzado",
   "abrigo",
+  "accesorios",
   "deporte",
   "formal",
-  "casual",
-  "ropa interior",
-  "accesorios",
-  "verano",
-  "invierno",
 ];
 
-const COLORS_LIST = ["black", "white", "blue", "beige", "red", "green"];
+// 🎨 LISTA DE COLORES PARA EL MOTOR
+const COLORS_LIST = [
+  "black",
+  "white",
+  "grey",
+  "blue",
+  "navy",
+  "beige",
+  "cream",
+  "red",
+  "green",
+  "pink",
+  "brown",
+  "terracota",
+];
+
+const COLOR_MAP: { [key: string]: string } = {
+  black: "#000000",
+  white: "#FFFFFF",
+  grey: "#94A3B8",
+  blue: "#3B82F6",
+  navy: "#1E3A8A",
+  beige: "#F5F5DC",
+  cream: "#FFFDD0",
+  red: "#EF4444",
+  green: "#10B981",
+  pink: "#EC4899",
+  brown: "#78350F",
+  terracota: "#A45A52",
+};
 
 const colors = {
   background: "#121929",
@@ -60,6 +87,7 @@ const colors = {
   textPrimary: "#FFFFFF",
   textSecondary: "#94A3B8",
   inputBg: "#0F172A",
+  success: "#10B981",
 };
 
 export default function Upload() {
@@ -68,21 +96,22 @@ export default function Upload() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
 
-  const showMessage = (msg: string) => {
+  const showErrorMessage = (msg: string) => {
     if (Platform.OS === "web") alert(msg);
-    else Alert.alert("iliAI", msg);
+    else Alert.alert("Error", msg);
   };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      showMessage("Necesitamos permiso para acceder a tus fotos");
+      showErrorMessage("Necesitamos permiso para acceder a tus fotos");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Corregido para mejor compatibilidad
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 5],
       quality: 0.8,
@@ -94,17 +123,16 @@ export default function Upload() {
   };
 
   const uploadImage = async () => {
-    if (!image) return showMessage("Selecciona una imagen");
-    if (!name.trim()) return showMessage("Dale un nombre a la prenda");
-    if (!selectedCategory) return showMessage("Elige una categoría");
-    if (!selectedColor) return showMessage("Elige un color");
+    if (!image) return showErrorMessage("Selecciona una imagen");
+    if (!name.trim()) return showErrorMessage("Dale un nombre a la prenda");
+    if (!selectedCategory) return showErrorMessage("Elige una categoría");
+    if (!selectedColor) return showErrorMessage("Elige un color");
 
     setLoading(true);
 
     try {
       const formData = new FormData();
 
-      // ✨ ADAPTACIÓN PARA SUBIDA (Móvil y Web)
       if (Platform.OS === "web") {
         const response = await fetch(image);
         const blob = await response.blob();
@@ -112,7 +140,6 @@ export default function Upload() {
       } else {
         const uriParts = image.split(".");
         const fileType = uriParts[uriParts.length - 1];
-
         // @ts-ignore
         formData.append("image", {
           uri: image,
@@ -125,24 +152,21 @@ export default function Upload() {
       formData.append("category", selectedCategory);
       formData.append("color", selectedColor);
 
-      // Enviamos al endpoint que procesa Cloudinary en tu Backend
       await api.post("/api/clothing/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
         timeout: 60000,
       });
 
-      showMessage("¡Prenda guardada en la nube! ☁️🚀");
+      setSuccessModalVisible(true);
 
-      // Reset de formulario
+      // Limpiar formulario
       setImage(null);
       setName("");
       setSelectedCategory("");
       setSelectedColor("");
     } catch (err: any) {
       console.log("ERROR UPLOAD:", err.response?.data || err.message);
-      showMessage("Error al subir. Verifica tu conexión o el servidor.");
+      showErrorMessage("Error al subir. Verifica tu conexión.");
     } finally {
       setLoading(false);
     }
@@ -211,10 +235,7 @@ export default function Upload() {
                 <View
                   style={[
                     styles.colorPreview,
-                    {
-                      backgroundColor:
-                        colorItem === "beige" ? "#F5F5DC" : colorItem,
-                    },
+                    { backgroundColor: COLOR_MAP[colorItem] },
                   ]}
                 />
                 <Text
@@ -278,6 +299,26 @@ export default function Upload() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={successModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="shirt" size={40} color={colors.success} />
+            </View>
+            <Text style={styles.confirmTitle}>¡Logrado!</Text>
+            <Text style={styles.confirmSubtitle}>
+              Prenda guardada correctamente. Ya puedes usarla para tus outfits.
+            </Text>
+            <TouchableOpacity
+              style={styles.successModalBtn}
+              onPress={() => setSuccessModalVisible(false)}
+            >
+              <Text style={styles.successBtnText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -388,4 +429,52 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { backgroundColor: "#334155", opacity: 0.6 },
   uploadBtnText: { color: "#fff", fontSize: 18, fontWeight: "800" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  successIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  confirmSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  successModalBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: colors.success,
+    elevation: 5,
+  },
+  successBtnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
 });

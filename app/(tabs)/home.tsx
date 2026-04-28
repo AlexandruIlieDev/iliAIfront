@@ -1,16 +1,33 @@
 import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Paleta de colores iliAI
+const colors = {
+  background: "#121929",
+  cardBackground: "#1E293B",
+  textPrimary: "#FFFFFF",
+  textSecondary: "#94A3B8",
+  danger: "#EF4444",
+};
+
 export default function Home() {
   const router = useRouter();
 
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem("token");
-    router.replace("/(auth)/login");
-  };
+  // 🛡️ SEGURIDAD: Si no hay token, no puedes estar aquí
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        // Usamos replace para que no pueda volver atrás
+        router.replace("/(auth)/login");
+      }
+    };
+    checkAuth();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -74,24 +91,10 @@ export default function Home() {
         </TouchableOpacity>
 
         <View style={styles.logoutSpacer} />
-
-        {/* 🔴 LOGOUT 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={18} color={colors.danger} style={{ marginRight: 8 }} />
-          <Text style={styles.logoutButtonText}>Cerrar sesión</Text>
-        </TouchableOpacity>*/}
       </View>
     </View>
   );
 }
-
-const colors = {
-  background: "#121929",
-  cardBackground: "#1E293B",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#94A3B8",
-  danger: "#EF4444",
-};
 
 const styles = StyleSheet.create({
   container: {

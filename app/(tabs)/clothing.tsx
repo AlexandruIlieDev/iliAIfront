@@ -1,5 +1,4 @@
 import {
-  Alert,
   View,
   Text,
   FlatList,
@@ -24,7 +23,7 @@ import { useFocusEffect } from "expo-router";
 import { BASE_URL } from "../../constants/Config";
 
 const api = axios.create({
-  baseURL: BASE_URL, // Usa la URL del archivo central
+  baseURL: BASE_URL,
   timeout: 15000,
   headers: {
     "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -33,7 +32,6 @@ const api = axios.create({
   },
 });
 
-// 🔐 INTERCEPTOR (Se mantiene igual, pero ahora usa la instancia vinculada a BASE_URL)
 api.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem("token");
@@ -78,6 +76,10 @@ export default function Clothing() {
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  // 🗑️ Estados para el nuevo modal de borrado
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
   const openImageViewer = (image: string) => {
     setSelectedImage(image);
     setImageViewerVisible(true);
@@ -86,10 +88,8 @@ export default function Clothing() {
   const getClothes = async (showFullLoading = false) => {
     try {
       if (showFullLoading) setLoading(true);
-
       const timestamp = new Date().getTime();
       const res = await api.get(`/api/clothing?t=${timestamp}`);
-
       setClothes(res.data);
     } catch (err) {
       console.log("Error al cargar ropa:", err);
@@ -123,60 +123,44 @@ export default function Clothing() {
     }
   };
 
-  const deleteClothing = async (id: string) => {
-    const confirmDelete = async () => {
-      try {
-        await api.delete(`/api/clothing/${id}`);
-        const updated = clothes.filter((item) => item._id !== id);
-        setClothes(updated);
-      } catch (err) {
-        console.log("ERROR DELETE:", err);
-      }
-    };
+  // 🗑️ Lógica de borrado con el modal personalizado
+  const requestDelete = (id: string) => {
+    setItemToDelete(id);
+    setDeleteModalVisible(true);
+  };
 
-    if (Platform.OS === "web") {
-      if (
-        window.confirm(
-          "¿Estás seguro de que quieres eliminar esta prenda del armario?",
-        )
-      ) {
-        confirmDelete();
-      }
-    } else {
-      Alert.alert(
-        "Eliminar prenda",
-        "¿Estás seguro de que quieres eliminar esta prenda del armario?",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Eliminar", style: "destructive", onPress: confirmDelete },
-        ],
-      );
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      await api.delete(`/api/clothing/${itemToDelete}`);
+      const updated = clothes.filter((item) => item._id !== itemToDelete);
+      setClothes(updated);
+    } catch (err) {
+      console.log("ERROR DELETE:", err);
+    } finally {
+      setDeleteModalVisible(false);
+      setItemToDelete(null);
     }
   };
 
   useEffect(() => {
     let result = [...clothes];
-
     if (selectedCategory !== "all") {
       result = result.filter((item) => item.category === selectedCategory);
     }
-
     if (searchText.trim() !== "") {
       result = result.filter((item) =>
         item.name.toLowerCase().includes(searchText.toLowerCase()),
       );
     }
-
     if (showFavoritesOnly) {
       result = result.filter((item) => item.isFavorite);
     }
-
     if (sortOrder === "az") {
       result.sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortOrder === "za") {
       result.sort((a, b) => b.name.localeCompare(a.name));
     }
-
     setFilteredClothes(result);
   }, [selectedCategory, searchText, showFavoritesOnly, clothes, sortOrder]);
 
@@ -191,7 +175,6 @@ export default function Clothing() {
 
   const renderClothingItem = ({ item }: { item: ClothingItem }) => {
     const imageUrl = item.image;
-
     return (
       <View style={styles.card}>
         <TouchableOpacity
@@ -220,7 +203,7 @@ export default function Clothing() {
 
         <TouchableOpacity
           style={styles.deleteBtn}
-          onPress={() => deleteClothing(item._id)}
+          onPress={() => requestDelete(item._id)}
         >
           <View
             style={[
@@ -236,7 +219,6 @@ export default function Clothing() {
           <Text style={styles.name} numberOfLines={1}>
             {item.name}
           </Text>
-
           <View style={styles.detailsRow}>
             <Text style={styles.detailText}>{item.category}</Text>
             <View style={styles.dotSeparator} />
@@ -271,7 +253,6 @@ export default function Clothing() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-
       <Text style={styles.title}>Mi armario 👕</Text>
 
       <View style={styles.topBar}>
@@ -285,7 +266,6 @@ export default function Clothing() {
             color={showSearch ? colors.accent : "#fff"}
           />
         </TouchableOpacity>
-
         <TouchableOpacity
           style={styles.iconBtn}
           onPress={() => setShowFavoritesOnly(!showFavoritesOnly)}
@@ -296,11 +276,9 @@ export default function Clothing() {
             color={showFavoritesOnly ? colors.danger : "#fff"}
           />
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.iconBtn} onPress={onRefresh}>
           <Ionicons name="refresh" size={20} color="#fff" />
         </TouchableOpacity>
-
         <View style={styles.sortContainer}>
           <TouchableOpacity
             onPress={() => setSortOrder("az")}
@@ -389,6 +367,37 @@ export default function Clothing() {
         }
       />
 
+      {/* 🗑️ MODAL DE BORRADO PERSONALIZADO */}
+      <Modal visible={deleteModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.warningIconCircle}>
+              <Ionicons name="alert-circle" size={40} color={colors.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>¿Eliminar prenda?</Text>
+            <Text style={styles.confirmSubtitle}>
+              Esta acción no se puede deshacer. La prenda desaparecerá de tu
+              armario virtual.
+            </Text>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => setDeleteModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteModalBtn}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.deleteBtnText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Visor de imagen */}
       <Modal visible={imageViewerVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.viewerContainer}
@@ -415,7 +424,6 @@ export default function Clothing() {
 }
 
 const styles = StyleSheet.create({
-  // Se mantienen tus estilos intactos
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -525,4 +533,66 @@ const styles = StyleSheet.create({
   closeModal: { position: "absolute", top: 60, right: 25 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   text: { color: colors.textSecondary, fontSize: 16 },
+  // 🎨 Estilos nuevos para el modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: colors.cardBackground,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  warningIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  confirmSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalButtonsRow: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    marginRight: 10,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  deleteModalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: colors.danger,
+  },
+  cancelBtnText: { color: "#fff", fontWeight: "600" },
+  deleteBtnText: { color: "#fff", fontWeight: "bold" },
 });

@@ -4,9 +4,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -30,18 +31,46 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // 1. Verificar si ya existe una sesión activa al cargar la pantalla
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (token) {
+          router.replace("/(tabs)/home");
+        }
+      } catch (e) {
+        console.log("Error al verificar sesión", e);
+      }
+    };
+    checkSession();
+  }, []);
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Por favor, rellena todos los campos");
+      return;
+    }
+
     try {
+      setLoading(true);
       const res = await axios.post(`${BASE_URL}/api/auth/login`, {
-        email,
-        password,
+        email: email.trim().toLowerCase(),
+        password: password,
       });
-      await AsyncStorage.setItem("token", res.data.token);
-      router.replace("/(tabs)/home");
-    } catch (err) {
+
+      if (res.data.token) {
+        await AsyncStorage.setItem("token", res.data.token);
+        router.replace("/(tabs)/home");
+      }
+    } catch (err: any) {
       console.log("Error en el login:", err);
-      // Aquí podrías añadir una alerta para el usuario
+      const msg = err.response?.data?.message || "Credenciales incorrectas";
+      Alert.alert("Error de acceso", msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,6 +96,7 @@ export default function Login() {
             placeholder="ejemplo@correo.com"
             placeholderTextColor="#475569"
             style={styles.input}
+            value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
@@ -80,17 +110,25 @@ export default function Login() {
             placeholderTextColor="#475569"
             secureTextEntry
             style={styles.input}
+            value={password}
             onChangeText={setPassword}
           />
         </View>
 
         <TouchableOpacity
-          style={styles.button}
+          style={[styles.button, loading && { opacity: 0.7 }]}
           onPress={handleLogin}
           activeOpacity={0.8}
+          disabled={loading}
         >
-          <Text style={styles.buttonText}>Entrar</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.buttonText}>Entrar</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
 
