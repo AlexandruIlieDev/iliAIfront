@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, ActivityIndicator } from "react-native";
 
+// 🔧 SUGERENCIA: define aquí un icono único para "éxito" en toda la app
+// y reutilízalo en profile.tsx, upload.tsx, clothing.tsx, etc.
+// export const SUCCESS_ICON = "checkmark-circle";
+
 export default function TabsLayout() {
   const [isReady, setIsReady] = useState(false);
   const [hasToken, setHasToken] = useState(false);
@@ -28,7 +32,7 @@ export default function TabsLayout() {
     return <View style={{ flex: 1, backgroundColor: "#121929" }} />;
   }
 
-  // 2. LA CLAVE: Si ya comprobó y NO hay token, redirigimos al login 
+  // 2. LA CLAVE: Si ya comprobó y NO hay token, redirigimos al login
   // antes de que se llegue a dibujar la estructura de los Tabs.
   if (!hasToken) {
     return <Redirect href="/(auth)/login" />;
@@ -41,6 +45,14 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#3B82F6",
         tabBarInactiveTintColor: "#94A3B8",
+        // 🔧 FIX: tamaños más compactos para que 5 tabs quepan sin overflow
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 0,
+        },
         tabBarStyle: {
           backgroundColor: "#1E293B",
           borderTopColor: "rgba(255,255,255,0.05)",
@@ -53,28 +65,38 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "Inicio",
-          tabBarIcon: ({ color }) => <Ionicons name="home" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="clothing"
         options={{
           title: "Armario",
-          tabBarIcon: ({ color }) => <Ionicons name="shirt" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="shirt" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="upload"
         options={{
           title: "Subir",
-          tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={20} color={color} />,
+        }}
+      />
+      {/* 🔧 FIX: la pestaña que faltaba registrar.
+          Antes Expo Router la añadía sola, sin icono ni título,
+          y eso era el icono roto + la flecha "<" que veías en todas las pantallas. */}
+      <Tabs.Screen
+        name="outfit"
+        options={{
+          title: "Outfit",
+          tabBarIcon: ({ color }) => <Ionicons name="sparkles" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Perfil",
-          tabBarIcon: ({ color }) => <Ionicons name="person" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={20} color={color} />,
         }}
       />
     </Tabs>
