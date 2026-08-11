@@ -35,18 +35,22 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  },
+  }
 );
 
-// ✅ CATEGORÍAS SINCRONIZADAS CON EL BACKEND (ESP)
+// ✅ LISTA DE CATEGORÍAS DETALLADA Y SINCRONIZADA CON IA
 const CATEGORIES = [
-  "superior",
-  "inferior",
-  "calzado",
+  "camiseta",
+  "camisa",
+  "sudadera",
+  "pantalón",
+  "pantalón corto",
+  "chaqueta",
   "abrigo",
-  "accesorios",
-  "deporte",
-  "formal",
+  "zapatillas",
+  "zapatos",
+  "botas",
+  "accesorio",
 ];
 
 // 🎨 LISTA DE COLORES PARA EL MOTOR
@@ -80,6 +84,25 @@ const COLOR_MAP: { [key: string]: string } = {
   terracota: "#A45A52",
 };
 
+// 🔄 MAPEO DE COLORES EN ESPAÑOL DE GEMINI A NUESTRA LISTA
+const SPANISH_TO_ENGLISH_COLOR: { [key: string]: string } = {
+  negro: "black",
+  blanco: "white",
+  gris: "grey",
+  azul: "blue",
+  "azul marino": "navy",
+  navy: "navy",
+  beige: "beige",
+  crema: "cream",
+  rojo: "red",
+  verde: "green",
+  rosa: "pink",
+  rosado: "pink",
+  marrón: "brown",
+  marron: "brown",
+  terracota: "terracota",
+};
+
 const colors = {
   background: "#121929",
   cardBackground: "#1E293B",
@@ -88,6 +111,7 @@ const colors = {
   textSecondary: "#94A3B8",
   inputBg: "#0F172A",
   success: "#10B981",
+  aiBubble: "rgba(59, 130, 246, 0.2)",
 };
 
 export default function Upload() {
@@ -96,14 +120,88 @@ export default function Upload() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
 
   const showErrorMessage = (msg: string) => {
     if (Platform.OS === "web") alert(msg);
     else Alert.alert("Error", msg);
   };
 
-  const pickImage = async () => {
+  // 🤖 FUNCIÓN PARA AUTO-DETECTAR CON GEMINI VISION
+  const autoDetectWithAI = async (imageUri: string) => {
+    try {
+      setAnalyzing(true);
+
+      const formData = new FormData();
+      if (Platform.OS === "web") {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        formData.append("imagen", blob, "prenda.jpg");
+      } else {
+        const uriParts = imageUri.split(".");
+        const fileType = uriParts[uriParts.length - 1];
+        // @ts-ignore
+        formData.append("imagen", {
+          uri: imageUri,
+          name: `prenda.${fileType}`,
+          type: `image/${fileType}`,
+        });
+      }
+
+      const res = await api.post("/api/clothing/analizar-imagen", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 20000,
+      });
+
+      if (res.data && res.data.exito && res.data.datos) {
+        const { name: aiName, category: aiCat, color: aiColor } = res.data.datos;
+
+        // 1. Asignamos Nombre
+        if (aiName) setName(aiName);
+
+        // 2. Mapeamos Categoría Ampliada
+        if (aiCat) {
+          const catLower = aiCat.toLowerCase().trim();
+          if (CATEGORIES.includes(catLower)) {
+            setSelectedCategory(catLower);
+          } else if (catLower.includes("pant") || catLower.includes("vaquero") || catLower.includes("jeans") || catLower.includes("inferior")) {
+            setSelectedCategory("pantalón");
+          } else if (catLower.includes("zapa") || catLower.includes("snk") || catLower.includes("calzado")) {
+            setSelectedCategory("zapatillas");
+          } else if (catLower.includes("suda") || catLower.includes("hoodie")) {
+            setSelectedCategory("sudadera");
+          } else if (catLower.includes("chaq") || catLower.includes("jack")) {
+            setSelectedCategory("chaqueta");
+          } else if (catLower.includes("abri") || catLower.includes("coat")) {
+            setSelectedCategory("abrigo");
+          } else if (catLower.includes("cami") || catLower.includes("top") || catLower.includes("superior")) {
+            setSelectedCategory("camiseta");
+          } else {
+            setSelectedCategory("camiseta");
+          }
+        }
+
+        // 3. Mapeamos Color
+        if (aiColor) {
+          const colorLower = aiColor.toLowerCase().trim();
+          const mappedColor = SPANISH_TO_ENGLISH_COLOR[colorLower] || colorLower;
+          if (COLORS_LIST.includes(mappedColor)) {
+            setSelectedColor(mappedColor);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.log("Error en auto-detección de IA:", err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  // 🖼️ SELECCIONAR DESDE LA GALERÍA
+  const pickImageFromGallery = async () => {
+    setPickerModalVisible(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       showErrorMessage("Necesitamos permiso para acceder a tus fotos");
@@ -117,8 +215,32 @@ export default function Upload() {
       quality: 0.8,
     });
 
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      const selectedUri = result.assets[0].uri;
+      setImage(selectedUri);
+      autoDetectWithAI(selectedUri);
+    }
+  };
+
+  // 📷 HACER FOTO CON LA CÁMARA
+  const takePhotoWithCamera = async () => {
+    setPickerModalVisible(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      showErrorMessage("Necesitamos permiso para acceder a la cámara");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 5],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const selectedUri = result.assets[0].uri;
+      setImage(selectedUri);
+      autoDetectWithAI(selectedUri);
     }
   };
 
@@ -183,7 +305,7 @@ export default function Upload() {
 
         <TouchableOpacity
           style={[styles.imagePicker, image ? styles.imageActive : null]}
-          onPress={pickImage}
+          onPress={() => setPickerModalVisible(true)}
           activeOpacity={0.8}
         >
           {image ? (
@@ -197,13 +319,24 @@ export default function Upload() {
           ) : (
             <View style={styles.placeholderContainer}>
               <View style={styles.iconCircle}>
-                <Ionicons name="cloud-upload" size={32} color={colors.accent} />
+                <Ionicons name="camera-reverse" size={32} color={colors.accent} />
               </View>
-              <Text style={styles.pickerTitle}>Subir fotografía</Text>
+              <Text style={styles.pickerTitle}>Hacer foto o Galería</Text>
               <Text style={styles.pickerSub}>Toca para seleccionar</Text>
             </View>
           )}
         </TouchableOpacity>
+
+        {/* 🤖 BARRA DE DETECCIÓN IA */}
+        {analyzing && (
+          <View style={styles.aiAnalyzingBox}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Ionicons name="sparkles" size={18} color={colors.accent} />
+            <Text style={styles.aiAnalyzingText}>
+              Gemini IA analizando prenda y removiendo fondo...
+            </Text>
+          </View>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Nombre de la prenda</Text>
@@ -300,6 +433,58 @@ export default function Upload() {
         </View>
       </ScrollView>
 
+      {/* 🚀 MODAL PARA ELEGIR CÁMARA O GALERÍA */}
+      <Modal
+        visible={pickerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setPickerModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.confirmCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.pickerIconCircle}>
+              <Ionicons name="camera" size={36} color={colors.accent} />
+            </View>
+            <Text style={styles.confirmTitle}>Subir fotografía</Text>
+            <Text style={styles.confirmSubtitle}>
+              ¿Cómo quieres añadir la imagen de tu prenda?
+            </Text>
+
+            <TouchableOpacity
+              style={styles.pickerOptionBtn}
+              onPress={takePhotoWithCamera}
+            >
+              <Ionicons name="camera-outline" size={20} color="#fff" />
+              <Text style={styles.pickerOptionText}>Hacer foto con la cámara</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.pickerOptionBtn, { marginTop: 12 }]}
+              onPress={pickImageFromGallery}
+            >
+              <Ionicons name="images-outline" size={20} color="#fff" />
+              <Text style={styles.pickerOptionText}>Elegir de la galería</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelModalBtn}
+              onPress={() => setPickerModalVisible(false)}
+            >
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 🚀 MODAL DE ÉXITO */}
       <Modal visible={successModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.confirmCard}>
@@ -308,7 +493,8 @@ export default function Upload() {
             </View>
             <Text style={styles.confirmTitle}>¡Logrado!</Text>
             <Text style={styles.confirmSubtitle}>
-              Prenda guardada correctamente. Ya puedes usarla para tus outfits.
+              Prenda guardada correctamente sin fondo. Ya puedes usarla para tus
+              outfits.
             </Text>
             <TouchableOpacity
               style={styles.successModalBtn}
@@ -342,7 +528,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 15,
     overflow: "hidden",
   },
   imageActive: { borderStyle: "solid", borderColor: colors.accent },
@@ -373,6 +559,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   changeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  aiAnalyzingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.aiBubble,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.4)",
+  },
+  aiAnalyzingText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
   inputGroup: { marginBottom: 20 },
   label: {
     color: colors.textSecondary,
@@ -446,6 +649,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
+  pickerIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  pickerOptionBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+    gap: 10,
+  },
+  pickerOptionText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  cancelModalBtn: {
+    width: "100%",
+    paddingVertical: 12,
+    marginTop: 10,
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    color: colors.textSecondary,
+    fontWeight: "600",
+    fontSize: 15,
+  },
   successIconCircle: {
     width: 70,
     height: 70,
@@ -459,14 +697,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   confirmSubtitle: {
     color: colors.textSecondary,
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   successModalBtn: {
     width: "100%",

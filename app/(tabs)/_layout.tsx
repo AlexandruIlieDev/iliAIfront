@@ -2,21 +2,20 @@ import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, ActivityIndicator } from "react-native";
-
-// 🔧 SUGERENCIA: define aquí un icono único para "éxito" en toda la app
-// y reutilízalo en profile.tsx, upload.tsx, clothing.tsx, etc.
-// export const SUCCESS_ICON = "checkmark-circle";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
   const [isReady, setIsReady] = useState(false);
   const [hasToken, setHasToken] = useState(false);
 
+  // 🚀 Obtenemos el espacio inferior seguro ocupado por la barra del sistema
+  const insets = useSafeAreaInsets();
+
   useEffect(() => {
     const checkToken = async () => {
       try {
         const token = await AsyncStorage.getItem("token");
-        // Si el token existe y es válido
         setHasToken(!!token && token !== "undefined");
       } catch (e) {
         setHasToken(false);
@@ -27,25 +26,20 @@ export default function TabsLayout() {
     checkToken();
   }, []);
 
-  // 1. Mientras comprueba, fondo oscuro total (evita parpadeo blanco)
   if (!isReady) {
     return <View style={{ flex: 1, backgroundColor: "#121929" }} />;
   }
 
-  // 2. LA CLAVE: Si ya comprobó y NO hay token, redirigimos al login
-  // antes de que se llegue a dibujar la estructura de los Tabs.
   if (!hasToken) {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // 3. Si hay token, dibujamos los Tabs normalmente
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#3B82F6",
         tabBarInactiveTintColor: "#94A3B8",
-        // 🔧 FIX: tamaños más compactos para que 5 tabs quepan sin overflow
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
@@ -56,8 +50,10 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: "#1E293B",
           borderTopColor: "rgba(255,255,255,0.05)",
-          height: 60,
-          paddingBottom: 10,
+          // 🚀 Ajuste de altura dinámico según botones de navegación del móvil
+          height: 60 + (insets.bottom > 0 ? insets.bottom : 0),
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          paddingTop: 8,
         },
       }}
     >
@@ -82,9 +78,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="add-circle" size={20} color={color} />,
         }}
       />
-      {/* 🔧 FIX: la pestaña que faltaba registrar.
-          Antes Expo Router la añadía sola, sin icono ni título,
-          y eso era el icono roto + la flecha "<" que veías en todas las pantallas. */}
       <Tabs.Screen
         name="outfit"
         options={{
