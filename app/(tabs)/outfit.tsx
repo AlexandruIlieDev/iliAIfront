@@ -7,8 +7,10 @@ import {
   Image,
   FlatList,
   ScrollView,
+  Alert,
+  Platform,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios, { AxiosHeaders } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +20,7 @@ import { BASE_URL } from "../../constants/Config";
 
 const api = axios.create({
   baseURL: BASE_URL,
+  timeout: 45000,
 });
 
 api.interceptors.request.use(async (config) => {
@@ -48,8 +51,8 @@ type ClothingItem = {
 };
 
 type OutfitResponse = {
-  superior: ClothingItem;
-  inferior: ClothingItem;
+  superior: ClothingItem | null;
+  inferior: ClothingItem | null;
   calzado: ClothingItem | null;
   abrigo: ClothingItem | null;
   accesorio: ClothingItem | null;
@@ -64,6 +67,33 @@ export default function OutfitScreen() {
   const [ocasion, setOcasion] = useState("Casual");
   const [clima, setClima] = useState("Templado");
 
+  // 🚀 "calzado" actúa como grupo maestro (Zapatillas, Zapatos, Botas)
+  const [prendasDeseadas, setPrendasDeseadas] = useState<string[]>([
+    "superior",
+    "inferior",
+    "calzado",
+  ]);
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === "web") {
+      alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const toggleTipoPrenda = (tipo: string) => {
+    if (prendasDeseadas.includes(tipo)) {
+      if (prendasDeseadas.length <= 1) {
+        showAlert("Aviso", "Debes seleccionar al menos una prenda.");
+        return;
+      }
+      setPrendasDeseadas(prendasDeseadas.filter((item) => item !== tipo));
+    } else {
+      setPrendasDeseadas([...prendasDeseadas, tipo]);
+    }
+  };
+
   const generateNewOutfits = async () => {
     try {
       setLoading(true);
@@ -71,36 +101,48 @@ export default function OutfitScreen() {
       const res = await api.post("/api/outfit/generar-ia", {
         ocasion,
         clima,
+        prendasDeseadas,
       });
 
-      if (res.data && res.data.outfit) {
-        setOutfits([res.data.outfit]);
+      if (res.data && res.data.outfits && res.data.outfits.length > 0) {
+        setOutfits(res.data.outfits);
+      } else {
+        showAlert("Aviso", "No se pudieron estructurar las propuestas. Inténtalo de nuevo.");
       }
-    } catch (err) {
-      console.log("ERROR OUTFIT GEMINI:", err);
+    } catch (err: any) {
+      console.log("ERROR OUTFIT GEMINI:", err.response?.data || err.message);
+
+      const errorMsg =
+        err.response?.data?.mensaje ||
+        "Error al conectar con la IA. Reintenta en unos segundos.";
+
+      showAlert("Error al generar outfit", errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    generateNewOutfits();
-  }, []);
+  // Helper para poner en mayúscula la primera letra
+  const formatCategoryLabel = (defaultLabel: string, item?: ClothingItem | null) => {
+    if (!item || !item.category) return defaultLabel;
+    const cat = item.category.trim();
+    return cat.charAt(0).toUpperCase() + cat.slice(1);
+  };
 
   const renderOutfitCard = (outfit: OutfitResponse, index: number) => {
-    // 💡 Filtrado seguro que elimina tanto 'null' como 'undefined'
+    // 🚀 La etiqueta de la imagen mostrará la categoría exacta de la DB (ej: "Zapatillas", "Sudadera")
     const items = [
-      { data: outfit.superior, label: "Superior" },
-      { data: outfit.inferior, label: "Inferior" },
-      { data: outfit.calzado, label: "Calzado" },
-      { data: outfit.abrigo, label: "Abrigo" },
-      { data: outfit.accesorio, label: "Accesorio" },
+      { data: outfit.superior, label: formatCategoryLabel("Superior", outfit.superior) },
+      { data: outfit.inferior, label: formatCategoryLabel("Inferior", outfit.inferior) },
+      { data: outfit.calzado, label: formatCategoryLabel("Calzado", outfit.calzado) },
+      { data: outfit.abrigo, label: formatCategoryLabel("Abrigo", outfit.abrigo) },
+      { data: outfit.accesorio, label: formatCategoryLabel("Accesorio", outfit.accesorio) },
     ].filter((item) => Boolean(item.data));
 
     return (
       <View style={styles.card} key={index}>
         <View style={styles.headerRow}>
-          <Text style={styles.outfitNumber}>Propuesta Gemini IA</Text>
+          <Text style={styles.outfitNumber}>Propuesta #{index + 1}</Text>
           {outfit.isColorimetryMatch && (
             <View style={styles.matchBadge}>
               <Ionicons name="sparkles" size={12} color="#fff" />
@@ -115,7 +157,7 @@ export default function OutfitScreen() {
           contentContainerStyle={styles.itemsScroll}
         >
           {items.map((item, idx) => {
-            const imageUri = item.data?.image || (item.data as any)?.imageUrl;
+            const imageUri = item.data?.image;
 
             return (
               <View key={`${item.data?._id || idx}-${idx}`} style={styles.imageWrapper}>
@@ -188,6 +230,30 @@ export default function OutfitScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <Text style={[styles.filterTitle, { marginTop: 12 }]}>Prendas a incluir (máx 5):</Text>
+        <View style={[styles.row, { flexWrap: "wrap", gap: 8 }]}>
+          {[
+            { id: "superior", label: "Superior" },
+            { id: "inferior", label: "Inferior" },
+            { id: "calzado", label: "Calzado / Zapatillas" },
+            { id: "abrigo", label: "Abrigo" },
+            { id: "accesorio", label: "Accesorio" },
+          ].map((item) => {
+            const active = prendasDeseadas.includes(item.id);
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => toggleTipoPrenda(item.id)}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {active ? "✓ " : "+ "}{item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       <TouchableOpacity
@@ -200,15 +266,15 @@ export default function OutfitScreen() {
         ) : (
           <>
             <Ionicons name="sparkles" size={18} color="#fff" />
-            <Text style={styles.generateText}>Generar Outfit</Text>
+            <Text style={styles.generateText}>Generar 3 Outfits</Text>
           </>
         )}
       </TouchableOpacity>
 
-      {loading && outfits.length === 0 ? (
+      {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Consultando a tu Personal Shopper IA...</Text>
+          <Text style={styles.loadingText}>Diseñando 3 propuestas personalizadas...</Text>
         </View>
       ) : (
         <FlatList
@@ -218,8 +284,10 @@ export default function OutfitScreen() {
           renderItem={({ item, index }) => renderOutfitCard(item, index)}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="shirt-outline" size={50} color={colors.secondary} />
-              <Text style={styles.emptyText}>Sube prendas para que la IA genere tu outfit.</Text>
+              <Ionicons name="sparkles-outline" size={50} color={colors.secondary} />
+              <Text style={styles.emptyText}>
+                Selecciona tus filtros y pulsa "Generar 3 Outfits" para ver las opciones.
+              </Text>
             </View>
           }
         />
@@ -231,12 +299,12 @@ export default function OutfitScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: 50 },
   title: { color: colors.text, fontSize: 28, fontWeight: "800", marginBottom: 15 },
-  filterContainer: { marginBottom: 20 },
-  filterTitle: { color: colors.secondary, fontSize: 12, fontWeight: "bold", marginBottom: 8, textTransform: "uppercase" },
-  row: { flexDirection: "row", gap: 10 },
+  filterContainer: { marginBottom: 15 },
+  filterTitle: { color: colors.secondary, fontSize: 11, fontWeight: "bold", marginBottom: 8, textTransform: "uppercase" },
+  row: { flexDirection: "row", gap: 8 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 12,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -246,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderColor: colors.accent,
   },
-  chipText: { color: colors.secondary, fontSize: 13, fontWeight: "600" },
+  chipText: { color: colors.secondary, fontSize: 12, fontWeight: "600" },
   chipTextActive: { color: "#fff" },
   generateBtn: {
     flexDirection: "row",
@@ -255,7 +323,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 20,
+    marginBottom: 15,
     gap: 8,
     elevation: 5,
   },
@@ -331,7 +399,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 12,
   },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", marginTop: 40 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", marginTop: 20 },
   loadingText: { color: colors.secondary, marginTop: 10, fontWeight: "600" },
-  emptyText: { color: colors.secondary, textAlign: "center", marginTop: 20 },
+  emptyText: { color: colors.secondary, textAlign: "center", marginTop: 20, paddingHorizontal: 20 },
 });
