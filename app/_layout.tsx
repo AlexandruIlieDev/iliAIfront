@@ -16,9 +16,22 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* Grupo de autenticación (Login / Register) */}
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          
+          {/* Navegación principal por pestañas */}
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          
+          {/* Pantalla modal (si la utilizas) */}
+          <Stack.Screen 
+            name="modal" 
+            options={{ 
+              presentation: 'modal', 
+              headerShown: true, 
+              title: 'Detalle' 
+            }} 
+          />
         </Stack>
         <StatusBar style="light" />
       </ThemeProvider>

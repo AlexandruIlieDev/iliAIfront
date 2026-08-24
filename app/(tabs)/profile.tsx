@@ -15,7 +15,7 @@ import {
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken, removeToken } from "../../utils/authStorage";
 import axios from "axios";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -27,7 +27,7 @@ const packageInfo = require("../../app.json");
 const api = axios.create({ baseURL: BASE_URL });
 
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem("token");
+  const token = await getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -95,7 +95,7 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem("token");
+      const token = await getToken();
       if (!token) {
         router.replace("/(auth)/login");
         return;
@@ -130,7 +130,7 @@ export default function ProfileScreen() {
   }, []);
 
   const handleForcedLogout = async () => {
-    await AsyncStorage.clear();
+    await removeToken();
     router.replace("/(auth)/login");
   };
 
@@ -183,7 +183,7 @@ export default function ProfileScreen() {
 
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    await AsyncStorage.clear();
+    await removeToken();
     router.replace("/(auth)/login");
   };
 

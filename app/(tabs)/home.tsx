@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "../../utils/authStorage";
 
 // Paleta de colores iliAI
 const colors = {
@@ -20,7 +20,7 @@ export default function Home() {
   // 🛡️ SEGURIDAD: Si no hay token, no puedes estar aquí
   useEffect(() => {
     const checkAuth = async () => {
-      const token = await AsyncStorage.getItem("token");
+      const token = await getToken();
       if (!token) {
         // Usamos replace para que no pueda volver atrás
         router.replace("/(auth)/login");

@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "../../utils/authStorage";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "expo-router";
@@ -34,7 +34,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem("token");
+    const token = await getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "../utils/authStorage";
 import { View, ActivityIndicator } from "react-native";
 
 export default function Index() {
@@ -10,7 +10,7 @@ export default function Index() {
   useEffect(() => {
     const checkToken = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
+        const token = await getToken();
         // Si el token existe y es válido, marcamos como logueado
         if (token && token !== "" && token !== "undefined") {
           setHasToken(true);
