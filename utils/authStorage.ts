@@ -1,24 +1,50 @@
-import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 const TOKEN_KEY = "token";
+const isWeb = Platform.OS === "web";
 
 /**
- * SecureStore cifra el valor usando Keychain (iOS) / Keystore (Android),
- * a diferencia de AsyncStorage que lo guarda en texto plano.
- * En web no hay Keychain/Keystore nativo: SecureStore usa localStorage
- * como fallback igual que hacía AsyncStorage, así que en web el
- * comportamiento no cambia (si más adelante quieres reforzarlo en web
- * también, habría que mirar una solución de cookies httpOnly en el backend).
+ * Almacenamiento del token de sesión.
+ *
+ * - iOS / Android: expo-secure-store (Keychain / Keystore, cifrado por el sistema).
+ * - Web: expo-secure-store NO está soportado en web (sus métodos fallan), así que
+ *   se usa localStorage, igual que hacía AsyncStorage antes. OJO: en web el token
+ *   queda legible por cualquier script de la página (riesgo XSS). Para reforzarlo
+ *   más adelante: tokens de vida más corta + refresh, o cookie httpOnly.
+ *
+ * El require de expo-secure-store es perezoso (solo en nativo) para que el bundle
+ * web nunca ejecute ese módulo.
  */
+const secureStore = () =>
+  require("expo-secure-store") as typeof import("expo-secure-store");
 
 export async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  if (isWeb) {
+    try {
+      return window.localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null; // SSR / almacenamiento bloqueado
+    }
+  }
+  return secureStore().getItemAsync(TOKEN_KEY);
 }
 
 export async function setToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  if (isWeb) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    return;
+  }
+  await secureStore().setItemAsync(TOKEN_KEY, token);
 }
 
 export async function removeToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  if (isWeb) {
+    try {
+      window.localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* nada que borrar */
+    }
+    return;
+  }
+  await secureStore().deleteItemAsync(TOKEN_KEY);
 }
